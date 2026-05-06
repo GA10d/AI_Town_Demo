@@ -48,7 +48,7 @@ interface MenuButtonTheme {
 @ccclass('MainMenu')
 export class MainMenu extends Component {
     @property
-    public gameSceneName = '';
+    public gameSceneName = 'test';
 
     @property
     public saveKey = 'aitown-save';
