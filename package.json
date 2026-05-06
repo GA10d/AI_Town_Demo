@@ -1,10 +1,6 @@
 {
-  "name": "AITownDemo",
-  "uuid": "1f1cd73f-7167-4c1e-9274-163d14101bd4",
-  "creator": {
-    "version": "3.8.6"
-  },
-  "description": "",
+  "name": "ai-town-python",
+  "description": "LLM backend launcher for the Python/Pygame AI Town prototype.",
   "scripts": {
     "start:llm": "node server/index.mjs",
     "start:llm:windows": "powershell -ExecutionPolicy Bypass -NoProfile -File scripts/start-llm-backend.ps1"

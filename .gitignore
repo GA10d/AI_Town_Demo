@@ -1,13 +1,13 @@
 
 #///////////////////////////
-# Cocos Creator 3D Project
+# Generated output
 #///////////////////////////
-library/
-temp/
-local/
+__pycache__/
+*.pyc
 build/
-profiles/
-native
+local/
+python_town/settings.json
+python_town/save.json
 
 #//////////////////////////
 # Local secrets and raw art drops
