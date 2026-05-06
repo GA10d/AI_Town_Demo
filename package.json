@@ -4,5 +4,9 @@
   "creator": {
     "version": "3.8.6"
   },
-  "description": ""
+  "description": "",
+  "scripts": {
+    "start:llm": "node server/index.mjs",
+    "start:llm:windows": "powershell -ExecutionPolicy Bypass -NoProfile -File scripts/start-llm-backend.ps1"
+  }
 }
