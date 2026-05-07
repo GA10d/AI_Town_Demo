@@ -1,0 +1,1 @@
+"""AI Town Python package."""

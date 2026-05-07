@@ -8,6 +8,8 @@ build/
 local/
 python_town/settings.json
 python_town/save.json
+python_town/logs/
+*.log
 
 #//////////////////////////
 # Local secrets and raw art drops
