@@ -38,11 +38,17 @@ def normalize_structured_response(data: Any, schema: dict[str, Any]) -> dict[str
     for field in schema["fields"]:
         name = field["name"]
         if name in data:
-            normalized[name] = data[name]
+            value = data[name]
         elif field.get("required"):
             raise ValueError(f"Structured phone response missing required field: {name}")
         else:
-            normalized[name] = None
+            value = None
+        enum_values = field.get("enum")
+        if enum_values and value is not None and value not in enum_values:
+            raise ValueError(
+                f"Structured phone response field {name} must be one of {enum_values}, got {value!r}."
+            )
+        normalized[name] = value
     return normalized
 
 

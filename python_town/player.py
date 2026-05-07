@@ -67,6 +67,9 @@ class PlayerCharacter:
     def start_phone_call(self) -> None:
         if self.phone_state in ("begin", "loop"):
             return
+        self.force_start_phone_call()
+
+    def force_start_phone_call(self) -> None:
         self.facing = "down"
         self.moving = False
         self.phone_state = "begin"

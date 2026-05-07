@@ -7,7 +7,7 @@ import time
 import pygame
 
 from .camera import Camera
-from .config import ACCENT, ART, ASSETS, FURNITURE_CATALOG_PATH, FURNITURE_PLACEMENTS_PATH, GOOD, MUTED, SCREEN_SIZE, TEXT
+from .config import ACCENT, ART, ASSETS, FURNITURE_CATALOG_PATH, FURNITURE_PLACEMENTS_PATH, GOOD, MUTED, TEXT
 from .furniture import FurniturePlacement, load_furniture_catalog, load_furniture_image, load_furniture_placements
 from .graphics import draw_text
 from .input import WindowsKeyboardFallback
@@ -47,7 +47,7 @@ class MapScene:
         self.camera = Camera(
             position=pygame.Vector2(0, 0),
             zoom=3.0,
-            viewport=pygame.Rect(0, 0, *SCREEN_SIZE),
+            viewport=pygame.Rect(0, 0, *self.app.screen.get_size()),
         )
         self.camera.center_on(self.player.foot_position, self.tilemap.pixel_size)
         self.zoom_speed = 2.0
@@ -60,6 +60,11 @@ class MapScene:
         self.last_camera_log_at = 0.0
         self.last_fallback_log_at = 0.0
         self.handled_phone_response_count = 0
+        self.emotion_image_dir = ASSETS / "resources" / "emotion"
+        self.emotion_images: dict[str, pygame.Surface | None] = {}
+        self.active_emotion_id = ""
+        self.active_emotion_elapsed = 0.0
+        self.active_emotion_duration = 6.0
         self.auto_path: list[GridCell] = []
         self.auto_path_index = 0
         self.auto_target_cell: GridCell | None = None
@@ -109,9 +114,11 @@ class MapScene:
         if event.type == pygame.MOUSEWHEEL:
             self.handle_mouse_wheel(event)
             return
-        if event.type == pygame.TEXTINPUT:
+        if event.type in (pygame.TEXTINPUT, pygame.TEXTEDITING):
             if self.phone_chat.is_open:
                 self.phone_chat.handle_event(event)
+                return
+            if event.type == pygame.TEXTEDITING:
                 return
             self.handle_text_input(event.text)
             return
@@ -181,6 +188,7 @@ class MapScene:
             self.log_camera_state("fallback reset")
 
         self.consume_phone_responses()
+        self.update_active_emotion(dt)
         auto_active = self.is_auto_control_active()
         control_keys = set() if self.phone_chat.is_open or auto_active else active_keys
         if self.auto_path:
@@ -200,11 +208,18 @@ class MapScene:
 
     def open_phone_chat(self) -> None:
         self.phone_chat.open()
-        self.player.start_phone_call()
+        self.player.force_start_phone_call()
         LOGGER.info("MapScene phone chat opened state=%s", self.player.phone_state)
+
+    def resize(self, size: tuple[int, int]) -> None:
+        self.camera.viewport = pygame.Rect(0, 0, *size)
+        self.camera.center_on(self.player.foot_position, self.tilemap.pixel_size)
+        self.phone_chat.resize(size)
 
     def close_phone_chat(self) -> None:
         self.phone_chat.close()
+        self.phone_toggle_latched = False
+        self.held_keys.discard(pygame.K_TAB)
         self.player.end_phone_call()
         LOGGER.info("MapScene phone chat closed state=%s", self.player.phone_state)
 
@@ -225,9 +240,46 @@ class MapScene:
         pending = responses[self.handled_phone_response_count :]
         self.handled_phone_response_count = len(responses)
         for response in pending:
+            self.show_response_emotion(response)
             furniture_id = self.response_furniture_id(response)
             if furniture_id:
                 self.start_navigation_to_furniture(furniture_id)
+
+    def show_response_emotion(self, response: dict) -> None:
+        value = response.get("emotion")
+        if value is None:
+            return
+        emotion_id = str(value).strip()
+        if not emotion_id or emotion_id.lower() == "neutral":
+            self.clear_active_emotion()
+            return
+        if not self.load_emotion_image(emotion_id):
+            LOGGER.warning("AI emotion id has no image asset: %s", emotion_id)
+            self.clear_active_emotion()
+            return
+        self.active_emotion_id = emotion_id
+        self.active_emotion_elapsed = 0.0
+        LOGGER.info("AI emotion bubble shown id=%s", emotion_id)
+
+    def clear_active_emotion(self) -> None:
+        self.active_emotion_id = ""
+        self.active_emotion_elapsed = 0.0
+
+    def update_active_emotion(self, dt: float) -> None:
+        if not self.active_emotion_id:
+            return
+        self.active_emotion_elapsed += dt
+        if self.active_emotion_elapsed >= self.active_emotion_duration:
+            self.clear_active_emotion()
+
+    def load_emotion_image(self, emotion_id: str) -> pygame.Surface | None:
+        if emotion_id not in self.emotion_images:
+            path = self.emotion_image_dir / f"{emotion_id}.png"
+            if path.exists():
+                self.emotion_images[emotion_id] = pygame.image.load(str(path)).convert_alpha()
+            else:
+                self.emotion_images[emotion_id] = None
+        return self.emotion_images[emotion_id]
 
     def response_furniture_id(self, response: dict) -> str:
         value = response.get("target_furniture_id")
@@ -287,7 +339,7 @@ class MapScene:
         self.auto_target_placement = placement
         self.action_progress_active = False
         self.action_progress_elapsed = 0.0
-        self.phone_chat.input_focused = False
+        self.phone_chat.set_input_focused(False)
         self.held_keys.difference_update(PLAYER_MOVE_KEYS.keys())
         if self.player.phone_state != "none":
             self.player.end_phone_call()
@@ -497,6 +549,28 @@ class MapScene:
         pygame.draw.rect(surf, GOOD, fill, border_radius=3)
         pygame.draw.rect(surf, TEXT, rect, 1, border_radius=3)
 
+    def draw_active_emotion(self, surf: pygame.Surface) -> None:
+        if not self.active_emotion_id or not self.player.current_animation:
+            return
+        image = self.load_emotion_image(self.active_emotion_id)
+        if not image:
+            return
+
+        player_image = self.player.current_animation.image
+        foot = self.camera.world_to_screen(self.player.foot_position)
+        player_height = player_image.get_height() * self.camera.zoom
+        bubble_size = (
+            max(1, round(image.get_width() * self.camera.zoom)),
+            max(1, round(image.get_height() * self.camera.zoom)),
+        )
+        bubble = pygame.transform.scale(image, bubble_size) if image.get_size() != bubble_size else image
+        gap = max(0, round(-70 * self.camera.zoom))
+        dest = (
+            round(foot.x - bubble_size[0] / 2),
+            round(foot.y - player_height - gap - bubble_size[1]),
+        )
+        surf.blit(bubble, dest)
+
     def describe_held_keys(self) -> list[str]:
         return sorted(pygame.key.name(key) for key in self.held_keys)
 
@@ -543,6 +617,7 @@ class MapScene:
 
         self.draw_furniture(surf)
         self.player.draw(surf, self.camera)
+        self.draw_active_emotion(surf)
         self.draw_action_progress(surf)
         self.phone_chat.draw(surf)
 

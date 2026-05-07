@@ -5,7 +5,8 @@ import threading
 
 import pygame
 
-from .config import MUTED, PANEL, PANEL_2, PROVIDERS, QUALITIES, SCREEN_SIZE, TEXT, WARN
+from .config import MUTED, PANEL, PANEL_2, PROVIDERS, QUALITIES, TEXT, WARN
+from .emotion import emotion_catalog_prompt, load_emotion_catalog
 from .graphics import draw_text, wrap_text
 from .furniture import FurnitureDefinition, furniture_catalog_prompt
 from .llm import label_for, llm_generate_json, llm_health
@@ -28,22 +29,48 @@ class PhoneChatOverlay:
         self.is_open = False
         self.messages: list[tuple[str, str]] = []
         self.input_text = ""
+        self.composition_text = ""
+        self.composition_start = 0
+        self.composition_length = 0
         self.sending = False
         self.backend_ok: bool | None = None
         self.input_focused = False
         self.close_requested = False
         self.schema = load_phone_response_schema()
+        self.emotion_catalog = load_emotion_catalog()
+        self.apply_emotion_schema_enum()
         self.system_prompt = "\n\n".join(
             [
                 structured_prompt(self.schema),
                 furniture_catalog_prompt(self.furniture_catalog),
+                emotion_catalog_prompt(self.emotion_catalog),
             ]
         )
         self.structured_responses: list[dict] = []
         self.full_responses: list[dict] = []
         self.debug_open = False
         self.debug_scroll = 0
-        self.rect = pygame.Rect(SCREEN_SIZE[0] - 344, SCREEN_SIZE[1] - 438, 328, 420)
+        self.rect = pygame.Rect(0, 0, 328, 420)
+        self.debug_rect = pygame.Rect(0, 0, 360, 420)
+        self.close_button_rect = pygame.Rect(self.rect.right - 36, self.rect.y + 16, 22, 22)
+        self.debug_button_rect = pygame.Rect(self.rect.right - 72, self.rect.y + 46, 54, 24)
+        self.input_rect = pygame.Rect(0, 0, 0, 0)
+        self.send_rect = pygame.Rect(0, 0, 64, 34)
+        self.resize((960, 640))
+
+    def apply_emotion_schema_enum(self) -> None:
+        emotion_ids = ["neutral", *sorted(self.emotion_catalog)]
+        for field in self.schema.get("fields", []):
+            if field.get("name") == "emotion":
+                field["enum"] = emotion_ids
+                break
+
+    def resize(self, size: tuple[int, int]) -> None:
+        width, height = size
+        self.rect = pygame.Rect(max(16, width - 344), max(16, height - 438), 328, 420)
+        if self.rect.bottom > height - 16:
+            self.rect.height = max(300, height - 32)
+            self.rect.y = 16
         self.debug_rect = pygame.Rect(
             max(16, self.rect.x - 376),
             self.rect.y,
@@ -52,12 +79,10 @@ class PhoneChatOverlay:
         )
         self.close_button_rect = pygame.Rect(self.rect.right - 36, self.rect.y + 16, 22, 22)
         self.debug_button_rect = pygame.Rect(self.rect.right - 72, self.rect.y + 46, 54, 24)
-        self.input_rect = pygame.Rect(0, 0, 0, 0)
-        self.send_rect = pygame.Rect(0, 0, 64, 34)
 
     def open(self) -> None:
         self.is_open = True
-        self.input_focused = True
+        self.set_input_focused(True)
         self.close_requested = False
         self.refresh_backend()
 
@@ -65,7 +90,7 @@ class PhoneChatOverlay:
         self.is_open = False
         self.debug_open = False
         self.debug_scroll = 0
-        self.input_focused = False
+        self.set_input_focused(False)
 
     def toggle(self) -> bool:
         if self.is_open:
@@ -99,33 +124,45 @@ class PhoneChatOverlay:
                 return False
             if len(self.input_text) < 500:
                 self.input_text += event.text
+            self.clear_composition()
+            return True
+        if event.type == pygame.TEXTEDITING:
+            if not self.input_focused:
+                return False
+            self.composition_text = event.text
+            self.composition_start = event.start
+            self.composition_length = event.length
             return True
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN and self.input_focused:
-                self.send()
+                if not self.composition_text:
+                    self.send()
             elif event.key == pygame.K_BACKSPACE and self.input_focused:
-                self.input_text = self.input_text[:-1]
+                if self.composition_text:
+                    self.clear_composition()
+                else:
+                    self.input_text = self.input_text[:-1]
             return True
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.close_button_rect.collidepoint(event.pos):
                 self.close_requested = True
-                self.input_focused = False
+                self.set_input_focused(False)
                 return True
             if self.debug_button_rect.collidepoint(event.pos):
                 self.toggle_debug()
-                self.input_focused = False
+                self.set_input_focused(False)
                 return True
             if self.input_rect.collidepoint(event.pos):
-                self.input_focused = True
+                self.set_input_focused(True)
                 return True
             if self.send_rect.collidepoint(event.pos):
                 self.send()
-                self.input_focused = True
+                self.set_input_focused(True)
                 return True
             if self.debug_open and self.debug_rect.collidepoint(event.pos):
-                self.input_focused = False
+                self.set_input_focused(False)
                 return True
-            self.input_focused = False
+            self.set_input_focused(False)
             return self.rect.collidepoint(event.pos)
         if event.type == pygame.MOUSEWHEEL:
             pos = pygame.mouse.get_pos()
@@ -145,6 +182,7 @@ class PhoneChatOverlay:
         if not text or self.sending:
             return
         self.input_text = ""
+        self.clear_composition()
         self.messages.append(("You", text))
         self.messages.append(("AI", "Thinking..."))
         self.sending = True
@@ -174,6 +212,21 @@ class PhoneChatOverlay:
             self.sending = False
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def clear_composition(self) -> None:
+        self.composition_text = ""
+        self.composition_start = 0
+        self.composition_length = 0
+
+    def set_input_focused(self, focused: bool) -> None:
+        if self.input_focused == focused:
+            return
+        self.input_focused = focused
+        self.clear_composition()
+        if focused:
+            pygame.key.start_text_input()
+        else:
+            pygame.key.stop_text_input()
 
     def draw(self, surf: pygame.Surface) -> None:
         if not self.is_open:
@@ -209,12 +262,11 @@ class PhoneChatOverlay:
         pygame.draw.rect(surf, PANEL_2, self.input_rect, border_radius=6)
         border = (117, 150, 146) if self.input_focused else (86, 92, 98)
         pygame.draw.rect(surf, border, self.input_rect, 1, border_radius=6)
-        shown = self.input_text if self.input_text else "Message"
-        color = TEXT if self.input_text else (120, 132, 136)
-        visible_text = shown[-32:]
-        text_rect = draw_text(surf, visible_text, (self.input_rect.x + 10, self.input_rect.y + 9), 15, color)
+        if self.input_focused:
+            pygame.key.set_text_input_rect(self.input_rect)
+        text_rect = self.draw_input_text(surf)
         if self.input_focused and (pygame.time.get_ticks() // 500) % 2 == 0:
-            text_end = text_rect.right + 2 if self.input_text else self.input_rect.x + 10
+            text_end = text_rect.right + 2 if (self.input_text or self.composition_text) else self.input_rect.x + 10
             caret_x = min(text_end, self.input_rect.right - 10)
             caret_top = self.input_rect.y + 9
             caret_bottom = self.input_rect.bottom - 9
@@ -223,6 +275,23 @@ class PhoneChatOverlay:
         pygame.draw.rect(surf, (50, 72, 76), self.send_rect, border_radius=6)
         pygame.draw.rect(surf, (104, 134, 130), self.send_rect, 1, border_radius=6)
         draw_text(surf, "Send", self.send_rect.center, 14, TEXT, center=True)
+
+    def draw_input_text(self, surf: pygame.Surface) -> pygame.Rect:
+        x = self.input_rect.x + 10
+        y = self.input_rect.y + 9
+        if not self.input_text and not self.composition_text:
+            return draw_text(surf, "Message", (x, y), 15, (120, 132, 136))
+
+        committed = self.input_text[-32:]
+        committed_rect = draw_text(surf, committed, (x, y), 15, TEXT)
+        if not self.composition_text:
+            return committed_rect
+
+        comp_x = committed_rect.right + 2 if committed else x
+        comp_rect = draw_text(surf, self.composition_text, (comp_x, y), 15, (239, 214, 142))
+        underline_y = min(self.input_rect.bottom - 7, comp_rect.bottom + 1)
+        pygame.draw.line(surf, (239, 214, 142), (comp_rect.left, underline_y), (comp_rect.right, underline_y), 1)
+        return committed_rect.union(comp_rect)
 
     def draw_debug_button(self, surf: pygame.Surface) -> None:
         fill = (60, 82, 86) if self.debug_open else PANEL_2

@@ -34,6 +34,8 @@ npm run start:llm
 - Enter in the phone chat: send the current message.
 - Q/E, +/- or PageUp/PageDown in the map scene: zoom the camera.
 - Home or 0 in the map scene: reset the camera on the character.
+- Drag the window border: resize the game window.
+- F11 or Alt+Enter: toggle fullscreen.
 
 ## Code Layout
 

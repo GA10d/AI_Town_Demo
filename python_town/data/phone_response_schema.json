@@ -25,8 +25,8 @@
       "name": "emotion",
       "type": "string",
       "required": true,
-      "enum": ["neutral", "friendly", "curious", "busy", "confused"],
-      "description": "Tone/emotional state for later character behavior."
+      "enum": ["neutral", "knife", "like", "mad", "money", "quetion", "sad", "shock", "shy", "sleepy", "water"],
+      "description": "情绪 id。必须严格使用 emotion_catalog.csv 中的 id；如果没有明显情绪，返回 neutral。"
     }
   ]
 }

@@ -6,7 +6,7 @@ from typing import Callable
 
 import pygame
 
-from .config import ASSETS, BG, GOOD, MUTED, PANEL, PANEL_2, PROVIDERS, QUALITIES, SAVE_PATH, SCREEN_SIZE, SETTINGS_PATH, TEXT, WARN
+from .config import ASSETS, BG, GOOD, MUTED, PANEL, PANEL_2, PROVIDERS, QUALITIES, SAVE_PATH, SETTINGS_PATH, TEXT, WARN
 from .graphics import draw_text, wrap_text
 from .llm import cycle_setting, label_for, llm_generate, llm_health
 from .logging_config import LOGGER
@@ -47,16 +47,38 @@ class MainMenu:
         self.status = ""
         self.chat_messages: list[tuple[str, str]] = []
         self.chat_input = ""
+        self.chat_composition = ""
+        self.chat_composition_start = 0
+        self.chat_composition_length = 0
         self.backend_status = "后端：未检测"
         self.sending = False
-        self.background = self.load_background()
+        self.background_source = self.load_background_source()
+        self.background = None
+        self.resize(self.app.screen.get_size())
 
-    def load_background(self) -> pygame.Surface | None:
+    def load_background_source(self) -> pygame.Surface | None:
         path = ASSETS / "resources" / "main-menu" / "background.png"
         if not path.exists():
             return None
         image = pygame.image.load(str(path)).convert()
-        return pygame.transform.smoothscale(image, SCREEN_SIZE)
+        return image
+
+    def resize(self, size: tuple[int, int]) -> None:
+        if self.background_source:
+            self.background = pygame.transform.smoothscale(self.background_source, size)
+
+    def layout_main_buttons(self, size: tuple[int, int]) -> None:
+        width, height = size
+        button_width = max(220, min(300, round(width * 0.23)))
+        button_height = 34
+        gap = 8
+        total_height = len(self.buttons) * button_height + (len(self.buttons) - 1) * gap
+        x = max(40, round(width * 0.045))
+        y = round(height * 0.45)
+        y = max(220, min(y, height - total_height - 64))
+        for index, button in enumerate(self.buttons):
+            button.rect.size = (button_width, button_height)
+            button.rect.topleft = (x, y + index * (button_height + gap))
 
     def start(self) -> None:
         LOGGER.info("MainMenu.start selected")
@@ -73,10 +95,13 @@ class MainMenu:
 
     def open_chat(self) -> None:
         self.panel = "chat"
+        pygame.key.start_text_input()
         self.refresh_backend()
 
     def toggle_settings(self) -> None:
         self.panel = None if self.panel == "settings" else "settings"
+        pygame.key.stop_text_input()
+        self.clear_chat_composition()
 
     def quit(self) -> None:
         self.app.running = False
@@ -95,6 +120,7 @@ class MainMenu:
         if not text or self.sending:
             return
         self.chat_input = ""
+        self.clear_chat_composition()
         self.chat_messages.append(("你", text))
         self.chat_messages.append(("AI", "思考中..."))
         self.sending = True
@@ -110,6 +136,9 @@ class MainMenu:
         threading.Thread(target=worker, daemon=True).start()
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        if self.panel == "chat" and event.type in (pygame.TEXTINPUT, pygame.TEXTEDITING):
+            self.handle_chat_text_event(event)
+            return
         if event.type == pygame.KEYDOWN:
             LOGGER.debug("MainMenu KEYDOWN key=%s panel=%s active=%s", pygame.key.name(event.key), self.panel, self.active)
             if self.panel == "chat":
@@ -122,7 +151,7 @@ class MainMenu:
             elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.buttons[self.active].action()
             elif event.key == pygame.K_ESCAPE:
-                self.panel = None
+                self.close_panel()
         elif event.type == pygame.MOUSEMOTION:
             for i, button in enumerate(self.buttons):
                 if button.rect.collidepoint(event.pos):
@@ -140,19 +169,39 @@ class MainMenu:
 
     def handle_chat_key(self, event: pygame.event.Event) -> None:
         if event.key == pygame.K_ESCAPE:
-            self.panel = None
+            self.close_panel()
         elif event.key == pygame.K_RETURN:
-            self.send_chat()
+            if not self.chat_composition:
+                self.send_chat()
         elif event.key == pygame.K_BACKSPACE:
-            self.chat_input = self.chat_input[:-1]
-        elif event.unicode and len(self.chat_input) < 500:
-            self.chat_input += event.unicode
+            if self.chat_composition:
+                self.clear_chat_composition()
+            else:
+                self.chat_input = self.chat_input[:-1]
+
+    def handle_chat_text_event(self, event: pygame.event.Event) -> None:
+        if event.type == pygame.TEXTINPUT:
+            if len(self.chat_input) < 500:
+                self.chat_input += event.text
+            self.clear_chat_composition()
+        elif event.type == pygame.TEXTEDITING:
+            self.chat_composition = event.text
+            self.chat_composition_start = event.start
+            self.chat_composition_length = event.length
+
+    def clear_chat_composition(self) -> None:
+        self.chat_composition = ""
+        self.chat_composition_start = 0
+        self.chat_composition_length = 0
 
     def settings_click(self, pos: tuple[int, int]) -> None:
         if pygame.Rect(332, 238, 300, 42).collidepoint(pos):
             cycle_setting(self.app.settings, "providerId", PROVIDERS)
         elif pygame.Rect(332, 290, 300, 42).collidepoint(pos):
             cycle_setting(self.app.settings, "quality", QUALITIES)
+        elif pygame.Rect(332, 394, 300, 42).collidepoint(pos):
+            self.app.toggle_fullscreen()
+            return
         save_json(SETTINGS_PATH, self.app.settings)
 
     def chat_click(self, pos: tuple[int, int]) -> None:
@@ -161,7 +210,12 @@ class MainMenu:
         elif pygame.Rect(646, 202, 96, 32).collidepoint(pos):
             self.refresh_backend()
         elif pygame.Rect(534, 536, 90, 34).collidepoint(pos):
-            self.panel = None
+            self.close_panel()
+
+    def close_panel(self) -> None:
+        self.panel = None
+        pygame.key.stop_text_input()
+        self.clear_chat_composition()
 
     def draw(self, surf: pygame.Surface) -> None:
         surf.fill(BG)
@@ -170,11 +224,12 @@ class MainMenu:
         else:
             self.draw_fallback_background(surf)
 
-        x, y = 56, 356
+        self.layout_main_buttons(surf.get_size())
         for i, button in enumerate(self.buttons):
-            button.rect.topleft = (x, y + i * 42)
             button.draw(surf, i == self.active)
-        draw_text(surf, self.status, (114, 572), 14, (132, 118, 96))
+        status_x = self.buttons[0].rect.x + 58
+        status_y = min(surf.get_height() - 42, self.buttons[-1].rect.bottom + 16)
+        draw_text(surf, self.status, (status_x, status_y), 14, (132, 118, 96))
 
         if self.panel == "settings":
             self.draw_settings(surf)
@@ -182,12 +237,13 @@ class MainMenu:
             self.draw_chat(surf)
 
     def draw_fallback_background(self, surf: pygame.Surface) -> None:
+        width, height = surf.get_size()
         surf.fill((13, 20, 26))
         draw_text(surf, "AI Town", (70, 95), 58, TEXT, True)
         draw_text(surf, "Prototype build 0.1", (74, 166), 20, MUTED)
-        pygame.draw.rect(surf, (48, 52, 50), (0, 468, 960, 94))
-        for x in range(40, 920, 92):
-            pygame.draw.rect(surf, (219, 184, 116), (x, 510, 42, 6))
+        pygame.draw.rect(surf, (48, 52, 50), (0, height - 172, width, 94))
+        for x in range(40, width - 40, 92):
+            pygame.draw.rect(surf, (219, 184, 116), (x, height - 130, 42, 6))
 
     def draw_settings(self, surf: pygame.Surface) -> None:
         rect = pygame.Rect(300, 126, 360, 420)
@@ -198,7 +254,7 @@ class MainMenu:
             ("LLM 服务", label_for(self.app.settings["providerId"], PROVIDERS), 238),
             ("模型档位", label_for(self.app.settings["quality"], QUALITIES), 290),
             ("后端地址", self.app.settings["serverUrl"].replace("http://", ""), 342),
-            ("音量", "100%", 394),
+            ("全屏", "开" if self.app.settings.get("fullscreen") else "关", 394),
         ]
         for name, value, top in rows:
             r = pygame.Rect(332, top, 300, 42)
@@ -237,9 +293,25 @@ class MainMenu:
         pygame.draw.rect(surf, PANEL_2, input_rect, border_radius=5)
         pygame.draw.rect(surf, (82, 88, 92), input_rect, 1, border_radius=5)
         shown = self.chat_input if self.chat_input else "输入消息"
-        draw_text(surf, shown[-48:], (input_rect.x + 14, input_rect.y + 11), 15, TEXT if self.chat_input else (120, 147, 142))
+        pygame.key.set_text_input_rect(input_rect)
+        self.draw_chat_input_text(surf, input_rect, shown)
         self.small_button(surf, pygame.Rect(650, 488, 86, 38), "发送")
         self.small_button(surf, pygame.Rect(534, 536, 90, 34), "关闭")
+
+    def draw_chat_input_text(self, surf: pygame.Surface, rect: pygame.Rect, placeholder: str) -> None:
+        x = rect.x + 14
+        y = rect.y + 11
+        if not self.chat_input and not self.chat_composition:
+            draw_text(surf, placeholder, (x, y), 15, (120, 147, 142))
+            return
+        committed = self.chat_input[-48:]
+        committed_rect = draw_text(surf, committed, (x, y), 15, TEXT)
+        if not self.chat_composition:
+            return
+        comp_x = committed_rect.right + 2 if committed else x
+        comp_rect = draw_text(surf, self.chat_composition, (comp_x, y), 15, (239, 214, 142))
+        underline_y = min(rect.bottom - 8, comp_rect.bottom + 1)
+        pygame.draw.line(surf, (239, 214, 142), (comp_rect.left, underline_y), (comp_rect.right, underline_y), 1)
 
     def small_button(self, surf: pygame.Surface, rect: pygame.Rect, label: str) -> None:
         pygame.draw.rect(surf, PANEL_2, rect, border_radius=5)

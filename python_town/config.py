@@ -11,6 +11,7 @@ SAVE_PATH = ROOT / "python_town" / "save.json"
 LOG_PATH = ROOT / "python_town" / "logs" / "ai_town.log"
 FURNITURE_CATALOG_PATH = ROOT / "python_town" / "data" / "furniture_catalog.csv"
 FURNITURE_PLACEMENTS_PATH = ROOT / "python_town" / "data" / "furniture_placements.csv"
+EMOTION_CATALOG_PATH = ROOT / "python_town" / "data" / "emotion_catalog.csv"
 PHONE_RESPONSE_SCHEMA_PATH = ROOT / "python_town" / "data" / "phone_response_schema.json"
 FURNITURE_IMAGE_DIRS = [
     ASSETS / "resources" / "furniture",
@@ -18,6 +19,7 @@ FURNITURE_IMAGE_DIRS = [
 ]
 
 SCREEN_SIZE = (960, 640)
+MIN_SCREEN_SIZE = (640, 420)
 BG = (7, 8, 8)
 PANEL = (18, 20, 22)
 PANEL_2 = (30, 33, 36)
