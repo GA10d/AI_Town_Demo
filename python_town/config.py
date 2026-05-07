@@ -11,6 +11,7 @@ SAVE_PATH = ROOT / "python_town" / "save.json"
 LOG_PATH = ROOT / "python_town" / "logs" / "ai_town.log"
 FURNITURE_CATALOG_PATH = ROOT / "python_town" / "data" / "furniture_catalog.csv"
 FURNITURE_PLACEMENTS_PATH = ROOT / "python_town" / "data" / "furniture_placements.csv"
+PHONE_RESPONSE_SCHEMA_PATH = ROOT / "python_town" / "data" / "phone_response_schema.json"
 FURNITURE_IMAGE_DIRS = [
     ASSETS / "resources" / "furniture",
     ART / "furniture",

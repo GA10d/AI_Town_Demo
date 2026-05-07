@@ -30,7 +30,8 @@ npm run start:llm
 - Enter/Space: activate selected menu item.
 - Esc: back/close panel, or return from the map to the menu.
 - WASD in the map scene: move the test character; the camera follows.
-- J in the map scene: answer/hang up the phone animation.
+- Tab in the map scene: open/close the phone chat.
+- Enter in the phone chat: send the current message.
 - Q/E, +/- or PageUp/PageDown in the map scene: zoom the camera.
 - Home or 0 in the map scene: reset the camera on the character.
 
@@ -69,6 +70,41 @@ python python_town\tools\sync_furniture_data.py
 or double-click `sync_furniture_data.bat` from the repository root. The sync only
 adds missing ids; it does not overwrite descriptions, positions, sizes, or access
 tiles that already exist in the CSV files.
+
+## Phone Structured Output
+
+The in-game phone chat uses structured JSON output. Configure the returned fields in:
+
+```text
+python_town/data/phone_response_schema.json
+```
+
+Important keys:
+
+- `prompt_id`: prompt folder under `prompt/`; defaults to `phone_chat`.
+- `display_field`: which JSON field is shown as the visible chat reply.
+- `fields`: the JSON fields the model should return.
+
+Example field:
+
+```json
+{
+  "name": "target_tile",
+  "type": "[number, number]|null",
+  "required": false,
+  "description": "A tile coordinate [x, y] if the request implies moving somewhere; otherwise null."
+}
+```
+
+The system prompt for phone chat lives in:
+
+```text
+prompt/phone_chat/system.md
+```
+
+At runtime, `python_town/data/furniture_catalog.csv` is parsed and appended to the
+phone system prompt as an id/description list. This avoids provider-specific file
+upload APIs and works through the shared OpenAI-compatible chat endpoint.
 
 ## Tile Slicing
 

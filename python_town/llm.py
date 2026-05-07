@@ -26,10 +26,35 @@ def llm_health(server_url: str) -> bool:
 
 
 def llm_generate(settings: dict, messages: list[tuple[str, str]]) -> str:
+    result = llm_request(settings, messages, "generate", "llm_test")
+    return result.get("text") or "(empty response)"
+
+
+def llm_generate_json(
+    settings: dict,
+    messages: list[tuple[str, str]],
+    prompt_id: str,
+    system_prompt: str,
+) -> dict:
+    result = llm_request(settings, messages, "generate-json", prompt_id, system_prompt)
+    value = result.get("json")
+    if not isinstance(value, dict):
+        raise RuntimeError("LLM JSON response was not an object.")
+    return value
+
+
+def llm_request(
+    settings: dict,
+    messages: list[tuple[str, str]],
+    endpoint: str,
+    prompt_id: str,
+    system_prompt: str = "",
+) -> dict:
     payload = {
-        "promptId": "llm_test",
+        "promptId": prompt_id,
         "profileId": settings["providerId"],
         "quality": settings["quality"],
+        "systemPrompt": system_prompt,
         "messages": [
             {"role": "assistant" if role == "AI" else "user", "content": text}
             for role, text in messages[-8:]
@@ -37,15 +62,14 @@ def llm_generate(settings: dict, messages: list[tuple[str, str]]) -> str:
     }
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
-        f"{settings['serverUrl'].rstrip('/')}/api/llm/generate",
+        f"{settings['serverUrl'].rstrip('/')}/api/llm/{endpoint}",
         data=data,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
-            result = json.loads(response.read().decode("utf-8"))
+            return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(body or f"LLM request failed: {exc.code}") from exc
-    return result.get("text") or "(空回复)"

@@ -1,0 +1,32 @@
+{
+  "prompt_id": "phone_chat",
+  "display_field": "reply",
+  "fields": [
+    {
+      "name": "reply",
+      "type": "string",
+      "required": true,
+      "description": "你扮演小镇里的角色回复给玩家的内容。"
+    },
+    {
+      "name": "intent",
+      "type": "string",
+      "required": true,
+      "enum": ["inspect_furniture", "schedule_activity"],
+      "description": "The high-level intent inferred from the player's request."
+    },
+    {
+      "name": "target_furniture_id",
+      "type": "string|null",
+      "required": false,
+      "description": "Furniture id from Furniture catalog in system prompt, if the player refers to a known furniture item; otherwise null."
+    },
+    {
+      "name": "emotion",
+      "type": "string",
+      "required": true,
+      "enum": ["neutral", "friendly", "curious", "busy", "confused"],
+      "description": "Tone/emotional state for later character behavior."
+    }
+  ]
+}

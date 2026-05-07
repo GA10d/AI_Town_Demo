@@ -109,6 +109,19 @@ def load_furniture_catalog(path: Path) -> dict[str, FurnitureDefinition]:
     return catalog
 
 
+def furniture_catalog_prompt(catalog: dict[str, FurnitureDefinition]) -> str:
+    if not catalog:
+        return "Furniture catalog: no known furniture is configured."
+    lines = [
+        "Furniture catalog available in this scene.",
+        "Use these ids exactly when filling target_furniture_id.",
+    ]
+    for furniture_id in sorted(catalog):
+        description = catalog[furniture_id].description or "(no description)"
+        lines.append(f"- {furniture_id}: {description}")
+    return "\n".join(lines)
+
+
 def load_furniture_placements(path: Path, catalog: dict[str, FurnitureDefinition]) -> list[FurniturePlacement]:
     placements: list[FurniturePlacement] = []
     for row in csv_rows(path):

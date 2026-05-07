@@ -60,13 +60,23 @@ class PlayerCharacter:
 
     def request_phone_toggle(self) -> None:
         if self.phone_state == "none":
-            self.facing = "down"
-            self.moving = False
-            self.phone_state = "begin"
-            self.set_animation("phone:begin")
+            self.start_phone_call()
         elif self.phone_state == "loop":
-            self.phone_state = "end"
-            self.set_animation("phone:end")
+            self.end_phone_call()
+
+    def start_phone_call(self) -> None:
+        if self.phone_state in ("begin", "loop"):
+            return
+        self.facing = "down"
+        self.moving = False
+        self.phone_state = "begin"
+        self.set_animation("phone:begin")
+
+    def end_phone_call(self) -> None:
+        if self.phone_state == "none":
+            return
+        self.phone_state = "end"
+        self.set_animation("phone:end")
 
     def update(
         self,
@@ -99,6 +109,43 @@ class PlayerCharacter:
 
         if self.current_animation:
             self.current_animation.update(dt)
+
+    def update_navigation(
+        self,
+        dt: float,
+        target: pygame.Vector2,
+        world_bounds: tuple[int, int],
+        can_stand_at: Callable[[pygame.Vector2], bool],
+    ) -> bool:
+        if self.phone_state != "none":
+            self.update_phone(dt)
+            return False
+
+        delta = target - self.position
+        distance = delta.length()
+        step = self.speed * dt
+        if distance <= max(1.0, step):
+            if not can_stand_at(target):
+                self.moving = False
+                self.set_animation(f"idle:{self.facing}")
+                if self.current_animation:
+                    self.current_animation.update(dt)
+                return False
+            self.position = self.clamped_position(target, world_bounds)
+            self.moving = False
+            self.set_animation(f"idle:{self.facing}")
+            if self.current_animation:
+                self.current_animation.update(dt)
+            return True
+
+        movement = delta.normalize()
+        self.facing = self.direction_name(movement)
+        self.moving = True
+        self.move_with_collision(movement, step, world_bounds, can_stand_at)
+        self.set_animation(f"walk:{self.facing}")
+        if self.current_animation:
+            self.current_animation.update(dt)
+        return False
 
     def move_with_collision(
         self,

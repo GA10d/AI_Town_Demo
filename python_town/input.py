@@ -13,7 +13,6 @@ class WindowsKeyboardFallback:
         pygame.K_a: 0x41,
         pygame.K_s: 0x53,
         pygame.K_d: 0x44,
-        pygame.K_j: 0x4A,
         pygame.K_q: 0x51,
         pygame.K_e: 0x45,
         pygame.K_LEFT: 0x25,
