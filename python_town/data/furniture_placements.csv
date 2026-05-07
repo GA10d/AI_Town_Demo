@@ -1,2 +1,12 @@
-﻿id,cell,size,access_tiles,blocks_movement
-wardrobe,"(1,3)",2x3,"(1,4);(2,4)",true
+id,cell,size,access_tiles,blocks_movement
+wardrobe,"(1,3)",2x3,"(1,4);(2,4)",TRUE
+big desk,"(6,4)",2x2,"(5,3);(5,4);(8,3);(8,4);(6,6);(7,6)",TRUE
+chair,"(3,7)",1x1,"(3,7)",FALSE
+lamp,"(11,7)",1x3,"(10,7);(11,8);(12,7)",TRUE
+potted plant,"(20,3)",2x2,"(19,3);(20,4);(21,4);(22,3)",TRUE
+sink,"(14,3)",2x3,"(15,4)",TRUE
+stove,"(1,11)",2x3,"(2,12)",TRUE
+toilet,"(17,3)",1x3,"(17,3)",FALSE
+tv left,"(3,2)",2x2,"(3,7)",TRUE
+tv right,"(5,2)",1x2,"(3,7)",TRUE
+washing machine,"(17,9)",2x3,"(18,10)",TRUE

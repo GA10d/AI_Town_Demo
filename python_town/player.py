@@ -21,7 +21,7 @@ PLAYER_MOVE_KEYS = {
 class PlayerCharacter:
     def __init__(self, root: Path, position: pygame.Vector2):
         self.position = pygame.Vector2(position)
-        self.speed = 76.0
+        self.speed = 114.0
         self.facing = "down"
         self.moving = False
         self.phone_state = "none"
@@ -174,4 +174,3 @@ class PlayerCharacter:
         foot = camera.world_to_screen(self.foot_position)
         dest = (round(foot.x - size[0] / 2), round(foot.y - size[1]))
         surf.blit(image, dest)
-
